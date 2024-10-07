@@ -1,0 +1,10 @@
+streamlit
+torch
+transformers
+pdfplumber
+python-docx
+nltk
+pandas
+plotly
+matplotlib
+kaleido
