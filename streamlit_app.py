@@ -194,6 +194,7 @@ def plot_sdg_dominant(df, title, pred_column):
         ),
         margin=dict(l=150, r=20, t=60, b=50),  # Adjusting margins
         height=600,  # Set a larger height to accommodate long labels
+        showlegend=False  # Turn off the legend
     )
     
     # Adjust the hover information to show percentages more clearly
