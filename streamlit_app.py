@@ -165,12 +165,44 @@ def predict_sentences(df_combined_paragraphs):
 
     return df_combined_sentences
 
-# Plotting function to create First, Second, and Third Dominant SDGs
+# Updated Plotting function to create First, Second, and Third Dominant SDGs with proper layout
+# Updated Plotting function to create First, Second, and Third Dominant SDGs with percentages and colorful bars
 def plot_sdg_dominant(df, title, pred_column):
     df_filtered = df[df[f'score{pred_column[-1]}'] > 0]
     labels = df_filtered[pred_column].value_counts()
-    fig = px.bar(labels.rename_axis('SDG Label').reset_index(name='Count'), 
-                 y='SDG Label', x='Count', orientation='h', title=title)
+
+    # Calculate percentages instead of raw counts
+    total_count = labels.sum()
+    percentages = (labels / total_count) * 100
+
+    # Create a bar plot with percentages and colorful bars
+    fig = px.bar(
+        percentages.rename_axis('SDG Label').reset_index(name='Percentage'), 
+        y='SDG Label', 
+        x='Percentage', 
+        orientation='h', 
+        title=title,
+        color='SDG Label',  # Colorful bars based on the SDG label
+        color_discrete_sequence=px.colors.qualitative.Plotly  # Set a colorful theme
+    )
+
+    # Adjusting layout to ensure labels aren't cut off and display percentages
+    fig.update_layout(
+        yaxis=dict(
+            automargin=True,  # Ensures enough space for long labels
+            tickmode='array',  # Fix tick mode
+        ),
+        margin=dict(l=150, r=20, t=60, b=50),  # Adjusting margins
+        height=600,  # Set a larger height to accommodate long labels
+    )
+    
+    # Adjust the hover information to show percentages more clearly
+    fig.update_traces(
+        hovertemplate='%{y}: %{x:.2f}%',  # Show percentage in hover label
+        texttemplate='%{x:.2f}%',         # Show percentage inside the bars
+        textposition='auto'               # Automatically position the text
+    )
+    
     return fig
 
 # Function to create CSV data for download
