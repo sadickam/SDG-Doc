@@ -191,9 +191,10 @@ def plot_sdg_dominant(df, title, pred_column):
         yaxis=dict(
             automargin=True,  # Ensures enough space for long labels
             tickmode='array',  # Fix tick mode
+            title=None  # Turn off y-axis title
         ),
         margin=dict(l=150, r=20, t=60, b=50),  # Adjusting margins
-        height=600,  # Set a larger height to accommodate long labels
+        height=500,  # Set a larger height to accommodate long labels
         showlegend=False  # Turn off the legend
     )
     
