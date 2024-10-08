@@ -366,10 +366,8 @@ if uploaded_file is not None:
             with col3:
                 third_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "Third Dominant SDGs", 'pred3')
                 st.plotly_chart(third_sdg_paragraph, use_container_width=True)
-                st.write("""
-                This graph represents the third most relevant SDG for each text. It provides further insight into the text's alignment
-                with multiple SDGs, offering a broader understanding of the content's focus areas.
-                """)
+                st.write("""This graph represents the third most relevant SDG for each text. It provides further insight into the text's alignment
+                with multiple SDGs, offering a broader understanding of the content's focus areas.""")
                 paragraph_plots.append(save_plot_as_image(third_sdg_paragraph, "paragraph_third_sdg.png"))
 
             # Provide paragraph-level CSV download
