@@ -1,6 +1,6 @@
 streamlit
 torch
-transformers
+transformers>= 4.0.0
 pdfplumber
 python-docx
 nltk
