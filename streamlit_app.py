@@ -225,6 +225,31 @@ def generate_docx_report(df_paragraphs, df_sentences, paragraph_plots, sentence_
     # Add paragraph-level analysis
     doc.add_heading("Paragraph-Level SDG Analysis", level=1)
     if not df_paragraphs.empty:
+        doc.add_heading("Interpreting Bar Graphs", level=2)
+        doc.add_paragraph(
+            "Each paragraph is processed by an AI model trained to predict which of the first 16 Sustainable Development Goals (SDGs) "
+            "is most relevant to the text. The model analyzes the content and returns a prediction for each SDG, providing scores that "
+            "represent the likelihood that the text is related to a particular SDG. The predictions are based on probabilities, and "
+            "the model outputs predictions for the first 16 SDGs. This paragraph-level analysis provides high-level insight into SDG alignment, "
+            "focusing on the top three SDG predictions for each paragraph with a probability score greater than zero."
+        )
+    
+        doc.add_paragraph(
+            "1. First Dominant SDGs Bar Graph: This graph displays the primary SDG that the AI model associates with each text. "
+            "The bars represent the percentage of paragraphs that are most strongly aligned with each SDG. This is the strongest "
+            "indication of relevance for each text, offering insight into the dominant sustainable development theme within the text."
+        )
+    
+        doc.add_paragraph(
+            "2. Second Dominant SDGs Bar Graph: This graph shows the second most relevant SDG for each text, where the model predicts "
+            "that although this SDG is not the primary focus, the text still has significant relevance to this goal."
+        )
+    
+        doc.add_paragraph(
+            "3. Third Dominant SDGs Bar Graph: Similar to the previous graphs, this graph represents the third most relevant SDG for each "
+            "text. It provides further insight into the text's alignment with multiple SDGs, offering a broader understanding of the "
+            "content's focus areas."
+        )
         for doc_name in df_paragraphs['document_name'].unique():
             doc.add_heading(f"Document: {doc_name}", level=2)
             doc.add_heading("First Dominant SDGs", level=3)
@@ -238,6 +263,32 @@ def generate_docx_report(df_paragraphs, df_sentences, paragraph_plots, sentence_
     # Add sentence-level analysis
     doc.add_heading("Sentence-Level SDG Analysis", level=1)
     if not df_sentences.empty:
+        doc.add_heading("Interpreting Bar Graphs", level=1)
+        doc.add_paragraph(
+            "Each sentence is processed by an AI model trained to predict which of the first 16 Sustainable Development Goals (SDGs) "
+            "is most relevant to the text. The model analyzes the content and returns a prediction for each SDG, providing scores that "
+            "represent the likelihood that the text is related to a particular SDG. The predictions are based on probabilities, and "
+            "the model outputs predictions for the first 16 SDGs. This sentence-level analysis provides deeper insight into SDG alignment, "
+            "focusing on the top three SDG predictions for each sentence with a probability score greater than zero."
+        )
+
+        doc.add_paragraph(
+            "1. First Dominant SDGs Bar Graph: This graph displays the primary SDG that the AI model associates with each sentence. "
+            "The bars represent the percentage of sentences that are most strongly aligned with each SDG. This is the strongest "
+            "indication of relevance for each sentence, offering insight into the dominant sustainable development theme within the text."
+        )
+
+        doc.add_paragraph(
+            "2. Second Dominant SDGs Bar Graph: This graph shows the second most relevant SDG for each sentence, where the model predicts "
+            "that although this SDG is not the primary focus, the text still has significant relevance to this goal"
+        )
+
+        doc.add_paragraph(
+            "3. Third Dominant SDGs Bar Graph: Similar to the previous graphs, this graph represents the third most relevant SDG for each "
+            "sentence. It provides further insight into the text's alignment with multiple SDGs, offering a broader understanding of the "
+            "content's focus areas."
+        )
+        
         for doc_name in df_sentences['document_name'].unique():
             doc.add_heading(f"Document: {doc_name}", level=2)
             doc.add_heading("First Dominant SDGs", level=3)
@@ -257,19 +308,19 @@ def generate_docx_report(df_paragraphs, df_sentences, paragraph_plots, sentence_
 # Streamlit Interface
 
 # Title and Sidebar Information
-st.set_page_config(page_title="SDG Predictor", page_icon="🌍", layout="wide")
+st.set_page_config(page_title="SDG Doc Analyzer", page_icon="🌍", layout="wide")
 
-st.sidebar.title("SDG File Analysis")
-st.sidebar.write("Upload a PDF or DOCX file to predict its alignment with the UN Sustainable Development Goals (SDGs).")
+st.sidebar.title("SDG Document Analysis")
+st.sidebar.write("Upload a PDF or DOCX file to analyse its alignment with the UN Sustainable Development Goals (SDGs).")
 
 uploaded_file = st.sidebar.file_uploader("Upload PDF/DOCX File", type=["pdf", "docx"])
 
 # Improved Layout
-st.title("Sustainable Development Goal (SDG) Prediction App 🌍")
+st.title("SDG Document Analysis App 🌍")
 st.markdown("""
     This app allows you to upload **PDF** and **DOCX** files to analyze their alignment with the 
     [United Nations Sustainable Development Goals](https://sdgs.un.org/goals). You can generate reports for paragraph-level 
-    and sentence-level predictions, visualize the most relevant SDGs, and download CSV and DOCX reports.
+    and sentence-level predictions, visualize the most relevant SDGs, and download CSV and DOCX reports. 
 """)
 
 if uploaded_file is not None:
@@ -279,7 +330,7 @@ if uploaded_file is not None:
 
     with st.spinner('Processing file...'):
         df_paragraphs = extract_content(uploaded_file)
-        df_paragraph_predictions = predict_paragraphs(df_paragraphs)
+        #df_paragraph_predictions = predict_paragraphs(df_paragraphs)
 
         # Add Option to Select Type of Analysis
         analysis_type = st.radio("Choose Analysis Type", ["Paragraph-Level", "Sentence-Level"])
@@ -292,19 +343,33 @@ if uploaded_file is not None:
 
         if analysis_type == "Paragraph-Level":
             st.subheader("Paragraph-Level SDG Predictions")
+            df_paragraph_predictions = predict_paragraphs(df_paragraphs)
             with col1:
                 first_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "First Dominant SDGs", 'pred1')
                 st.plotly_chart(first_sdg_paragraph, use_container_width=True)
+                st.write("""
+                This graph displays the primary SDGs that the AI model associates with each paragraph. The bars represent the percentage of 
+                paragraphs most strongly aligned with each SDG. This is the strongest indication of relevance for each text, 
+                offering insight into the dominant sustainable development theme within the text.
+                """)
                 paragraph_plots.append(save_plot_as_image(first_sdg_paragraph, "paragraph_first_sdg.png"))
 
             with col2:
                 second_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "Second Dominant SDGs", 'pred2')
                 st.plotly_chart(second_sdg_paragraph, use_container_width=True)
+                st.write("""
+                This graph shows the second most relevant SDG for each paragraph, where the model predicts that although 
+                this SDG is not the primary focus, but the text is still relevant to this goal.
+                """")
                 paragraph_plots.append(save_plot_as_image(second_sdg_paragraph, "paragraph_second_sdg.png"))
 
             with col3:
                 third_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "Third Dominant SDGs", 'pred3')
                 st.plotly_chart(third_sdg_paragraph, use_container_width=True)
+                st.write("""
+                This graph represents the third most relevant SDG for each text. It provides further insight into the text's alignment
+                with multiple SDGs, offering a broader understanding of the content's focus areas.
+                """)
                 paragraph_plots.append(save_plot_as_image(third_sdg_paragraph, "paragraph_third_sdg.png"))
 
             # Provide paragraph-level CSV download
@@ -319,6 +384,11 @@ if uploaded_file is not None:
             with col1:
                 first_sdg_sentence = plot_sdg_dominant(df_sentence_predictions, "Sentence: First Dominant SDGs", 'pred1')
                 st.plotly_chart(first_sdg_sentence, use_container_width=True)
+                st.write("""
+                This graph displays the primary SDGs that the AI model associates with each sentence. The bars represent the percentage of 
+                sentences most strongly aligned with each SDG. This is the strongest indication of relevance for each text, 
+                offering insight into the dominant sustainable development theme within the text.
+                """)
                 sentence_plots.append(save_plot_as_image(first_sdg_sentence, "sentence_first_sdg.png"))
 
             with col2:
