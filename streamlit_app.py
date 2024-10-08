@@ -360,7 +360,7 @@ if uploaded_file is not None:
                 st.write("""
                 This graph shows the second most relevant SDG for each paragraph, where the model predicts that although 
                 this SDG is not the primary focus, but the text is still relevant to this goal.
-                """")
+                """)
                 paragraph_plots.append(save_plot_as_image(second_sdg_paragraph, "paragraph_second_sdg.png"))
 
             with col3:
