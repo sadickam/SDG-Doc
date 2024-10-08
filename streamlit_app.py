@@ -16,6 +16,8 @@ import tempfile  # For handling temporary files
 # Download nltk resource
 nltk.download('punkt_tab')
 
+checkpoint = "sadickam/sdgBERT"
+
 # Define keywords/phrases for sections to exclude
 EXCLUDED_SECTION_KEYWORDS = [
     r'table\s+of\s+contents', r'list\s+of\s+figures', r'list\s+of\s+tables', r'abbreviations',
