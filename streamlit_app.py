@@ -4,21 +4,52 @@ import re
 import torch
 import pdfplumber
 import pandas as pd
-from docx import Document
+from docx2pdf import convert
 from docx.shared import Inches
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from nltk.tokenize import sent_tokenize
 import plotly.express as px
 import plotly.io as pio  # For saving Plotly charts as images
 import nltk
-from io import BytesIO
-import tempfile  # For temporary files
+import tempfile  # For handling temporary files
 
 # Download nltk resource
 nltk.download('punkt_tab')
 
-# Model checkpoint for SDG BERT
-checkpoint = "sadickam/sdgBERT"
+# Define keywords/phrases for sections to exclude
+EXCLUDED_SECTION_KEYWORDS = [
+    r'table\s+of\s+contents', r'list\s+of\s+figures', r'list\s+of\s+tables', r'abbreviations',
+    r'references', r'bibliography', r'glossary', r'appendix', r'contents', r'content',
+    r'list\s+of\s+definitions', r'definitions', r'tables', r'figures'
+]
+
+# Define patterns for identifying section start and headings
+HEADING_PATTERNS = [
+    r'^[A-Z][A-Za-z\s]{0,100}$',  # Title-like headings (first letter capitalized, up to 100 chars)
+    r'^\d+(\.\d+)*\s+[A-Z][A-Za-z\s]{0,100}$',  # Numbered headings (e.g., 1. Introduction)
+    r'^[IVXLC]+\.\s+[A-Z][A-Za-z\s]+$',  # Roman numeral headings (e.g., IV. Analysis)
+    r'^[A-Za-z]\.\s+[A-Z][A-Za-z\s]+$',  # Letter outline (e.g., A. Definitions)
+    r'.+(\.+|\s)\d+$',  # Text with dot leaders or page numbers (common in ToC)
+]
+
+# Define a threshold for short text (common in headings)
+HEADING_MAX_WORDS = 10
+
+# Function to detect if text is part of excluded sections
+def is_excluded_section(text):
+    # Check for excluded section keywords
+    text_lower = text.lower()
+    for keyword in EXCLUDED_SECTION_KEYWORDS:
+        if re.search(keyword, text_lower):
+            return True
+
+    # Check for heading patterns (short, possibly capitalized text)
+    if len(text.split()) <= HEADING_MAX_WORDS:
+        for pattern in HEADING_PATTERNS:
+            if re.match(pattern, text.strip()):
+                return True
+
+    return False
 
 # Function to clean extracted text
 def clean_text(text):
@@ -26,48 +57,76 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text
 
-# Function to extract paragraphs from PDF
+# Function to extract paragraphs and tables from PDF while excluding unwanted sections
 def extract_pdf_content(pdf_file):
     document_name = pdf_file.name
-    df = pd.DataFrame(columns=["document_name", "page_number", "paragraph_number", "text"])
+    df = pd.DataFrame(columns=["document_name", "page_number", "paragraph_number", "row_number", "content_type", "text"])
 
     with pdfplumber.open(pdf_file) as pdf:
         paragraph_number = 0
+        row_number = 0
+        exclude_mode = False  # Flag to indicate if we are in an excluded section
+
         for page_num, page in enumerate(pdf.pages, start=1):
+            # Extract paragraphs
             text = clean_text(page.extract_text())
             paragraphs = text.split('\n')
 
             for paragraph in paragraphs:
                 cleaned_paragraph = clean_text(paragraph)
+
+                # Check if the paragraph is part of an excluded section
+                if is_excluded_section(cleaned_paragraph):
+                    exclude_mode = True
+
+                # If the excluded section is detected, skip paragraphs until the next section is found
+                if exclude_mode:
+                    if len(cleaned_paragraph.split()) > 5 and not is_excluded_section(cleaned_paragraph):
+                        exclude_mode = False  # End of excluded section
+                    else:
+                        continue  # Skip current paragraph
+
                 if cleaned_paragraph and len(cleaned_paragraph.split()) > 2:  # Valid paragraph check
                     paragraph_number += 1
                     df = pd.concat([df, pd.DataFrame([{
-                        "document_name": document_name,  # Ensure document name is added
+                        "document_name": document_name,
                         "page_number": page_num,
                         "paragraph_number": paragraph_number,
+                        "row_number": None,
+                        "content_type": "paragraph",
                         "text": cleaned_paragraph,
                     }])], ignore_index=True)
 
-    return df
-
-# Function to extract paragraphs from DOCX
-def extract_docx_content(docx_file):
-    document_name = docx_file.name
-    doc = Document(docx_file)
-    df = pd.DataFrame(columns=["document_name", "paragraph_number", "text"])
-
-    paragraph_number = 0
-    for para in doc.paragraphs:
-        cleaned_paragraph = clean_text(para.text)
-        if cleaned_paragraph and len(cleaned_paragraph.split()) > 2:  # Valid paragraph check
-            paragraph_number += 1
-            df = pd.concat([df, pd.DataFrame([{
-                "document_name": document_name,  # Ensure document name is added
-                "paragraph_number": paragraph_number,
-                "text": cleaned_paragraph
-            }])], ignore_index=True)
+            # Extract tables
+            tables = page.extract_tables()
+            for table in tables:
+                for row in table:
+                    row_number += 1
+                    row_text = " | ".join([str(cell).strip() for cell in row if cell])  # Join all cells in the row
+                    if row_text:  # Ensure it's not empty
+                        df = pd.concat([df, pd.DataFrame([{
+                            "document_name": document_name,
+                            "page_number": page_num,
+                            "paragraph_number": None,
+                            "row_number": row_number,
+                            "content_type": "table_row",
+                            "text": row_text,
+                        }])], ignore_index=True)
 
     return df
+
+# Function to convert DOCX to PDF and return the PDF path
+def convert_docx_to_pdf(docx_file):
+    # Save the uploaded file to a temporary location
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
+        tmp_docx.write(docx_file.getbuffer())
+        tmp_docx_path = tmp_docx.name
+
+    # Convert DOCX to PDF
+    tmp_pdf_path = tmp_docx_path.replace('.docx', '.pdf')
+    convert(tmp_docx_path, tmp_pdf_path)
+
+    return tmp_pdf_path
 
 # Function to extract content based on file type
 def extract_content(file):
@@ -76,7 +135,10 @@ def extract_content(file):
     if file_extension == '.pdf':
         return extract_pdf_content(file)
     elif file_extension == '.docx':
-        return extract_docx_content(file)
+        # Convert DOCX to PDF
+        pdf_path = convert_docx_to_pdf(file)
+        with open(pdf_path, 'rb') as pdf_file:
+            return extract_pdf_content(pdf_file)
     else:
         return pd.DataFrame()
 
@@ -154,7 +216,7 @@ def predict_sentences(df_combined_paragraphs):
             sorted_predictions = sorted(zip(label_list, predictions), key=lambda x: x[1], reverse=True)
             pred_labels, pred_scores = zip(*sorted_predictions)
             sentence_row = {
-                "document_name": row["document_name"],  # Ensure document name is propagated
+                "document_name": row["document_name"],
                 "page_number": row.get("page_number", None),
                 "paragraph_number": row["paragraph_number"],
                 "text": sentence,
@@ -320,6 +382,10 @@ st.markdown("""
     This app allows you to upload **PDF** and **DOCX** files to analyze their alignment with the 
     [United Nations Sustainable Development Goals](https://sdgs.un.org/goals). You can generate reports for paragraph-level 
     and sentence-level predictions, visualize the most relevant SDGs, and download CSV and DOCX reports. 
+    
+    This app breaks a document into paragraphs by detecting new lines. Hence, a sentence may be identified as a paragraph
+    if a new line is introduced after it. Table content is extracted in rows, and the contents for each are concatenated.
+    Table of contents, list of abbreviations, and reference lists are excluded from the analysis and the CSV reports.
 """)
 
 if uploaded_file is not None:
