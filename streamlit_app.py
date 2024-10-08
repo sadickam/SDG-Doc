@@ -384,8 +384,8 @@ st.markdown("""
     and sentence-level predictions, visualize the most relevant SDGs, and download CSV and DOCX reports. 
     
     This app breaks a document into paragraphs by detecting new lines. Hence, a sentence may be identified as a paragraph
-    if a new line is introduced after it. Table content is extracted in rows, and the contents for each are concatenated.
-    Table of contents, list of abbreviations, and reference lists are excluded from the analysis and the CSV reports.
+    if a new line is introduced after it. Table text is extracted in rows, and the content for each row is concatenated.
+    The analysis and the CSV reports exclude the table of contents, list of abbreviations, and reference lists.
 """)
 
 if uploaded_file is not None:
