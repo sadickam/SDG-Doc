@@ -165,7 +165,6 @@ def predict_sentences(df_combined_paragraphs):
 
     return df_combined_sentences
 
-# Updated Plotting function to create First, Second, and Third Dominant SDGs with proper layout
 # Updated Plotting function to create First, Second, and Third Dominant SDGs with percentages and colorful bars
 def plot_sdg_dominant(df, title, pred_column):
     df_filtered = df[df[f'score{pred_column[-1]}'] > 0]
@@ -330,7 +329,14 @@ if uploaded_file is not None:
 
     with st.spinner('Processing file...'):
         df_paragraphs = extract_content(uploaded_file)
-        #df_paragraph_predictions = predict_paragraphs(df_paragraphs)
+
+        # **Optimization:**
+        # Compute df_paragraph_predictions only once, outside the if-elif block.
+        if not df_paragraphs.empty:
+            df_paragraph_predictions = predict_paragraphs(df_paragraphs)
+        else:
+            st.error("No valid content found in the uploaded file.")
+            st.stop()
 
         # Add Option to Select Type of Analysis
         analysis_type = st.radio("Choose Analysis Type", ["Paragraph-Level", "Sentence-Level"])
@@ -343,7 +349,7 @@ if uploaded_file is not None:
 
         if analysis_type == "Paragraph-Level":
             st.subheader("Paragraph-Level SDG Predictions")
-            df_paragraph_predictions = predict_paragraphs(df_paragraphs)
+
             with col1:
                 first_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "First Dominant SDGs", 'pred1')
                 st.plotly_chart(first_sdg_paragraph, use_container_width=True)
@@ -376,6 +382,8 @@ if uploaded_file is not None:
 
         elif analysis_type == "Sentence-Level":
             st.subheader("Sentence-Level SDG Predictions")
+
+            # No need to recompute df_paragraph_predictions; it's already done.
             df_sentence_predictions = predict_sentences(df_paragraph_predictions)
 
             # Display sentence-level predictions with three bar plots
