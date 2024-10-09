@@ -492,7 +492,7 @@ if uploaded_file is not None:
             with col2:
                 second_sdg_sentence = plot_sdg_dominant(df_sentence_predictions, "Sentence: Second Dominant SDGs", 'pred2')
                 st.plotly_chart(second_sdg_sentence, use_container_width=True)
-                 st.write("""
+                st.write("""
                 This graph shows the second most relevant SDG for each sentence, where the model predicts that although 
                 this SDG is not the primary focus, but the text is still relevant to this goal.
                 """)
