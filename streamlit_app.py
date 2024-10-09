@@ -36,7 +36,7 @@ def clear_analysis():
     st.session_state.uploaded_file = None
     st.session_state.df_paragraph_predictions = None
     st.session_state.df_sentence_predictions = None
-    st.set_query_params()  # This will trigger a rerun
+    st.query_params()  # This will trigger a rerun
 
 # Sidebar to clear all records and start new analysis
 if st.sidebar.button("Clear and Start New Analysis"):
