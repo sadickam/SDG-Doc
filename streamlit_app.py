@@ -2,13 +2,14 @@ import streamlit as st
 import os
 import re
 import torch
-import pdfplumber
+import fitz  # PyMuPDF
 import pandas as pd
 from docx2pdf import convert
 from docx.shared import Inches
 from docx import Document
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from nltk.tokenize import sent_tokenize
+from nltk.tokenize import TextTilingTokenizer
 import plotly.express as px
 import plotly.io as pio  # For saving Plotly charts as images
 import nltk
@@ -16,7 +17,7 @@ import tempfile  # For handling temporary files
 from io import BytesIO
 
 # Download nltk resource
-nltk.download('punkt_tab')
+nltk.download('punkt')
 
 # Streamlit Title and Sidebar Information
 st.set_page_config(page_title="SDG Doc Analyzer", page_icon="🌍", layout="wide")
@@ -84,60 +85,95 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
     return text
 
-# Function to extract paragraphs and tables from PDF while excluding unwanted sections
-def extract_pdf_content(pdf_file):
-    document_name = pdf_file.name
-    df = pd.DataFrame(columns=["document_name", "page_number", "paragraph_number", "row_number", "content_type", "text"])
+# Functions to extract paragraphs and tables from PDF using PyMuPDF while excluding unwanted sections
+def segment_text(text):
+    """Segment text using a combination of rule-based and TextTiling methods."""
+    # Step 1: Rule-based segmentation (split at double newlines)
+    initial_segments = re.split(r'\n\s*\n', text)
+    refined_segments = []
 
-    with pdfplumber.open(pdf_file) as pdf:
-        paragraph_number = 0
-        row_number = 0
-        exclude_mode = False  # Flag to indicate if we are in an excluded section
+    # Step 2: Refine with TextTiling for each initial segment
+    tokenizer = TextTilingTokenizer()
+    for segment in initial_segments:
+        if len(segment.split()) > 100:  # Apply TextTiling only to larger segments
+            sub_segments = tokenizer.tokenize(segment)
+            refined_segments.extend(sub_segments)
+        else:
+            refined_segments.append(segment)
 
-        for page_num, page in enumerate(pdf.pages, start=1):
-            # Extract paragraphs
-            text = clean_text(page.extract_text())
-            paragraphs = text.split('\n')
+    return refined_segments
 
-            for paragraph in paragraphs:
-                cleaned_paragraph = clean_text(paragraph)
+def is_potential_table(block):
+    """Enhanced table detection using block properties and content."""
+    # Determine if a block might be a table by looking for common table characteristics
+    # This includes:
+    # - Multiple lines with similar x-coordinates
+    # - Rows with consistent spacing
+    # - Presence of common table-like delimiters (e.g., '|' or '\t')
 
-                # Check if the paragraph is part of an excluded section
-                if is_excluded_section(cleaned_paragraph):
-                    exclude_mode = True
+    # Check for vertical alignment (lines starting at similar x-coordinates)
+    lines = block.splitlines()
+    line_starts = [line[:10] for line in lines]  # Take the start of each line to detect alignment patterns
 
-                # If the excluded section is detected, skip paragraphs until the next section is found
-                if exclude_mode:
-                    if len(cleaned_paragraph.split()) > 5 and not is_excluded_section(cleaned_paragraph):
-                        exclude_mode = False  # End of excluded section
-                    else:
-                        continue  # Skip current paragraph
+    # Heuristic checks for table-like structure
+    if len(lines) > 1 and len(set(line_starts)) < len(lines) / 2:
+        return True  # Indicates that many lines start similarly (suggesting a table)
 
-                if cleaned_paragraph and len(cleaned_paragraph.split()) > 2:  # Valid paragraph check
-                    paragraph_number += 1
-                    df = pd.concat([df, pd.DataFrame([{
-                        "document_name": document_name,
-                        "page_number": page_num,
-                        "paragraph_number": paragraph_number,
-                        "row_number": None,
-                        "content_type": "paragraph",
-                        "text": cleaned_paragraph,
-                    }])], ignore_index=True)
+    # Check for common table delimiters
+    if any(re.search(r'[|,\t]', line) for line in lines):
+        return True  # Presence of delimiters suggests a table-like structure
 
-            # Extract tables
-            tables = page.extract_tables()
-            for table in tables:
-                for row in table:
-                    row_number += 1
-                    row_text = " | ".join([str(cell).strip() for cell in row if cell])  # Join all cells in the row
-                    if row_text:  # Ensure it's not empty
+    # Check for table row-like content based on the layout width
+    width = len(block.split("\n", 1)[0])  # Approximate width of the first line
+    if width > 40:  # If the line is wide, it could be a row in a table
+        return True
+
+    return False
+
+def extract_text_pymupdf(pdf_file_path):
+    """Extracts text from a PDF using PyMuPDF, including enhanced table detection and segmentation."""
+    document_name = pdf_file_path.split("/")[-1]
+    df = pd.DataFrame(columns=["document_name", "page_number", "paragraph_number", "content_type", "text"])
+    paragraph_number = 0
+
+    with fitz.open(pdf_file_path) as doc:
+        for page_num, page in enumerate(doc, start=1):
+            blocks = page.get_text("blocks")  # Extract text in blocks
+            
+            # Sort blocks by vertical position (y0) and then horizontal position (x0) for reading order
+            blocks = sorted(blocks, key=lambda b: (b[1], b[0]))
+            
+            for block in blocks:
+                block_text = clean_text(block[4])  # The text content is in the fifth element of each block
+
+                # Basic check to avoid empty blocks
+                if not block_text:
+                    continue
+
+                # Check if the block is part of an excluded section
+                if is_excluded_section(block_text):
+                    continue  # Skip this block
+
+                # Enhanced table detection
+                if is_potential_table(block_text):
+                    content_type = "table_row"
+                else:
+                    content_type = "paragraph"
+                
+                # Segment the block text using the refined segmentation method
+                segmented_paragraphs = segment_text(block_text)
+
+                # Iterate over segmented paragraphs
+                for paragraph in segmented_paragraphs:
+                    cleaned_paragraph = clean_text(paragraph)
+                    if cleaned_paragraph:
+                        paragraph_number += 1
                         df = pd.concat([df, pd.DataFrame([{
                             "document_name": document_name,
                             "page_number": page_num,
-                            "paragraph_number": None,
-                            "row_number": row_number,
-                            "content_type": "table_row",
-                            "text": row_text,
+                            "paragraph_number": paragraph_number,
+                            "content_type": content_type,
+                            "text": cleaned_paragraph
                         }])], ignore_index=True)
 
     return df
@@ -160,12 +196,11 @@ def extract_content(file):
     file_extension = os.path.splitext(file.name)[1].lower()
 
     if file_extension == '.pdf':
-        return extract_pdf_content(file)
+        return extract_text_pymupdf(file.name)
     elif file_extension == '.docx':
         # Convert DOCX to PDF
         pdf_path = convert_docx_to_pdf(file)
-        with open(pdf_path, 'rb') as pdf_file:
-            return extract_pdf_content(pdf_file)
+        return extract_text_pymupdf(pdf_path)
     else:
         return pd.DataFrame()
 
@@ -176,8 +211,7 @@ def prep_text(text):
     for sent_token in sent_tokens:
         word_tokens = [str(word_token).strip().lower() for word_token in sent_token.split()]
         clean_sents.append(' '.join(word_tokens))
-    joined = ' '.join(clean_sents).strip()
-    return re.sub(r'`|"', "", joined)
+    return ' '.join(clean_sents).strip()
 
 # Load the tokenizer and model with GPU support
 @st.cache_resource
@@ -408,10 +442,6 @@ st.markdown("""
     This app allows you to upload **PDF** and **DOCX** files to analyze their alignment with the 
     [United Nations Sustainable Development Goals](https://sdgs.un.org/goals). You can generate reports for paragraph-level 
     and sentence-level predictions, visualize the most relevant SDGs, and download CSV and DOCX reports. 
-    
-    This app breaks a document into paragraphs by detecting new lines. Hence, a sentence may be identified as a paragraph
-    if a new line is introduced after it. Table text is extracted in rows, and the content for each row is concatenated.
-    The analysis and the CSV reports exclude the table of contents, list of abbreviations, and reference lists.
 """)
 
 if uploaded_file is not None:
@@ -422,7 +452,6 @@ if uploaded_file is not None:
     with st.spinner('Processing file...'):
         df_paragraphs = extract_content(uploaded_file)
 
-        # **Optimization:**
         # Compute df_paragraph_predictions only once, outside the if-elif block.
         if not df_paragraphs.empty:
             df_paragraph_predictions = predict_paragraphs(df_paragraphs)
@@ -445,27 +474,16 @@ if uploaded_file is not None:
             with col1:
                 first_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "First Dominant SDGs", 'pred1')
                 st.plotly_chart(first_sdg_paragraph, use_container_width=True)
-                st.write("""
-                This graph displays the primary SDGs that the AI model associates with each paragraph. The bars represent the percentage of 
-                paragraphs most strongly aligned with each SDG. This is the strongest indication of relevance for each text, 
-                offering insight into the dominant sustainable development theme within the text.
-                """)
                 paragraph_plots.append(save_plot_as_image(first_sdg_paragraph, "paragraph_first_sdg.png"))
 
             with col2:
                 second_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "Second Dominant SDGs", 'pred2')
                 st.plotly_chart(second_sdg_paragraph, use_container_width=True)
-                st.write("""
-                This graph shows the second most relevant SDG for each paragraph, where the model predicts that although 
-                this SDG is not the primary focus, but the text is still relevant to this goal.
-                """)
                 paragraph_plots.append(save_plot_as_image(second_sdg_paragraph, "paragraph_second_sdg.png"))
 
             with col3:
                 third_sdg_paragraph = plot_sdg_dominant(df_paragraph_predictions, "Third Dominant SDGs", 'pred3')
                 st.plotly_chart(third_sdg_paragraph, use_container_width=True)
-                st.write("""This graph represents the third most relevant SDG for each paragraph. It provides further insight into the text's alignment
-                with multiple SDGs, offering a broader understanding of the content's focus areas.""")
                 paragraph_plots.append(save_plot_as_image(third_sdg_paragraph, "paragraph_third_sdg.png"))
 
             # Provide paragraph-level CSV download
@@ -482,43 +500,29 @@ if uploaded_file is not None:
             with col1:
                 first_sdg_sentence = plot_sdg_dominant(df_sentence_predictions, "Sentence: First Dominant SDGs", 'pred1')
                 st.plotly_chart(first_sdg_sentence, use_container_width=True)
-                st.write("""
-                This graph displays the primary SDGs that the AI model associates with each sentence. The bars represent the percentage of 
-                sentences most strongly aligned with each SDG. This is the strongest indication of relevance for each text, 
-                offering insight into the dominant sustainable development theme within the text.
-                """)
                 sentence_plots.append(save_plot_as_image(first_sdg_sentence, "sentence_first_sdg.png"))
 
             with col2:
                 second_sdg_sentence = plot_sdg_dominant(df_sentence_predictions, "Sentence: Second Dominant SDGs", 'pred2')
                 st.plotly_chart(second_sdg_sentence, use_container_width=True)
-                st.write("""
-                This graph shows the second most relevant SDG for each sentence, where the model predicts that although 
-                this SDG is not the primary focus, but the text is still relevant to this goal.
-                """)
                 sentence_plots.append(save_plot_as_image(second_sdg_sentence, "sentence_second_sdg.png"))
 
             with col3:
                 third_sdg_sentence = plot_sdg_dominant(df_sentence_predictions, "Sentence: Third Dominant SDGs", 'pred3')
                 st.plotly_chart(third_sdg_sentence, use_container_width=True)
-                st.write("""This graph represents the third most relevant SDG for each sentence. It provides further insight into the text's alignment
-                with multiple SDGs, offering a broader understanding of the content's focus areas.""")
                 sentence_plots.append(save_plot_as_image(third_sdg_sentence, "sentence_third_sdg.png"))
 
             # Provide sentence-level CSV download
             st.download_button("Download Sentence Predictions CSV", data=create_csv(df_sentence_predictions, 'sentence_predictions.csv'),
                                file_name='sentence_predictions.csv')
 
-        # Generate and download DOCX report (only available if both analyses are run)
+        # Generate and download DOCX report based on the selected analysis type
         st.markdown("---")
         st.subheader("Download Reports")
-
-        # Generate and download DOCX report based on the selected analysis type
-        if analysis_type == "Paragraph-Level" or analysis_type == "Sentence-Level":
-            buffer = generate_docx_report(
-                df_paragraph_predictions, locals().get('df_sentence_predictions', pd.DataFrame()), paragraph_plots, sentence_plots, analysis_type
-            )
-            st.download_button("Download DOCX Report", data=buffer, file_name="sdg_analysis_report.docx")
+        buffer = generate_docx_report(
+            df_paragraph_predictions, locals().get('df_sentence_predictions', pd.DataFrame()), paragraph_plots, sentence_plots, analysis_type
+        )
+        st.download_button("Download DOCX Report", data=buffer, file_name="sdg_analysis_report.docx")
 
 else:
     st.info("Please upload a PDF or DOCX file to begin the analysis.")
