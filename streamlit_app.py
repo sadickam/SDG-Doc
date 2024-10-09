@@ -130,13 +130,14 @@ def is_potential_table(block):
 
     return False
 
-def extract_text_pymupdf(pdf_file_path):
+def extract_text_pymupdf(pdf_file):
     """Extracts text from a PDF using PyMuPDF, including enhanced table detection and segmentation."""
-    document_name = pdf_file_path.split("/")[-1]
+    document_name = pdf_file.name
     df = pd.DataFrame(columns=["document_name", "page_number", "paragraph_number", "content_type", "text"])
     paragraph_number = 0
 
-    with fitz.open(pdf_file_path) as doc:
+    # Open the PDF file from a BytesIO object
+    with fitz.open(stream=pdf_file.read(), filetype="pdf") as doc:
         for page_num, page in enumerate(doc, start=1):
             blocks = page.get_text("blocks")  # Extract text in blocks
             
@@ -196,11 +197,12 @@ def extract_content(file):
     file_extension = os.path.splitext(file.name)[1].lower()
 
     if file_extension == '.pdf':
-        return extract_text_pymupdf(file.name)
+        return extract_text_pymupdf(file)
     elif file_extension == '.docx':
         # Convert DOCX to PDF
         pdf_path = convert_docx_to_pdf(file)
-        return extract_text_pymupdf(pdf_path)
+        with open(pdf_path, 'rb') as pdf_file:
+            return extract_text_pymupdf(pdf_file)
     else:
         return pd.DataFrame()
 
