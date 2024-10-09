@@ -18,6 +18,9 @@ from io import BytesIO
 # Download nltk resource
 nltk.download('punkt')
 
+# Streamlit Title and Sidebar Information
+st.set_page_config(page_title="SDG Doc Analyzer", page_icon="🌍", layout="wide")
+
 # Define session state initialization
 if 'uploaded_file' not in st.session_state:
     st.session_state.uploaded_file = None
@@ -393,9 +396,6 @@ def generate_docx_report(df_paragraphs, df_sentences, paragraph_plots, sentence_
     return buffer
 
 # Streamlit Interface
-
-# Title and Sidebar Information
-st.set_page_config(page_title="SDG Doc Analyzer", page_icon="🌍", layout="wide")
 
 st.sidebar.title("SDG Document Analysis")
 st.sidebar.write("Upload a PDF or DOCX file to analyse its alignment with the UN Sustainable Development Goals (SDGs).")
