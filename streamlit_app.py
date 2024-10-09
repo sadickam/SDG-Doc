@@ -16,7 +16,7 @@ import tempfile  # For handling temporary files
 from io import BytesIO
 
 # Download nltk resource
-nltk.download('punkt')
+nltk.download('punkt_tab')
 
 # Streamlit Title and Sidebar Information
 st.set_page_config(page_title="SDG Doc Analyzer", page_icon="🌍", layout="wide")
