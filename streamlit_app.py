@@ -6,6 +6,7 @@ import pdfplumber
 import pandas as pd
 from docx2pdf import convert
 from docx.shared import Inches
+from docx import Document
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from nltk.tokenize import sent_tokenize
 import plotly.express as px
