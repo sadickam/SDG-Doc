@@ -96,9 +96,14 @@ def segment_text(text):
     # Step 2: Refine with TextTiling for each initial segment
     tokenizer = TextTilingTokenizer()
     for segment in initial_segments:
-        if len(segment.split()) > 100:  # Apply TextTiling only to larger segments
-            sub_segments = tokenizer.tokenize(segment)
-            refined_segments.extend(sub_segments)
+        # Apply TextTiling only to larger segments with enough content
+        if len(segment.split()) > 100 and segment.count('\n') > 1:
+            try:
+                sub_segments = tokenizer.tokenize(segment)
+                refined_segments.extend(sub_segments)
+            except ValueError:
+                # If TextTiling fails, fall back to the original segment
+                refined_segments.append(segment)
         else:
             refined_segments.append(segment)
 
