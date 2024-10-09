@@ -18,6 +18,7 @@ from io import BytesIO
 
 # Download nltk resource
 nltk.download('punkt_tab')
+nltk.download('stopwords')
 
 # Streamlit Title and Sidebar Information
 st.set_page_config(page_title="SDG Doc Analyzer", page_icon="🌍", layout="wide")
