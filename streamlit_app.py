@@ -13,6 +13,7 @@ import plotly.express as px
 import plotly.io as pio  # For saving Plotly charts as images
 import nltk
 import tempfile  # For handling temporary files
+from io import BytesIO
 
 # Download nltk resource
 nltk.download('punkt_tab')
